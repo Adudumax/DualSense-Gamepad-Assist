@@ -4,22 +4,36 @@
 
 DualSense Gamepad Assist is an Assetto Corsa CSP `Gamepad FX` script for DualSense controllers. It combines controller steering assist, automatic clutch, optional automatic shifting, CSP native haptics, and adaptive triggers in one in-game control panel.
 
-Version `0.6.2` keeps the verified `0.6.1` vibration behavior unchanged. This release reorganizes internal naming under DGA, adds separate English and Chinese packages, and prepares a clean public source snapshot.
-
 ## Features
 
-- CSP native DualSense haptics for engine texture, curbs, bodywork, tire skid, gear shifts, and collisions.
-- A `0.5.1` compatibility grip layer using `vibrationLeft / vibrationRight` alongside native haptics.
-- Adaptive triggers with L2 braking resistance and ABS cues, plus R2 throttle resistance, wheelspin, limiter pulses, and shift rebound.
-- A compact overview with feedback presets, custom preset save and load actions, and overall grip-vibration strength.
-- An independent advanced-settings window that can be moved and resized freely.
-- Controller steering assist, automatic clutch, optional automatic shifting, calibration, graphs, gamma, and deadzone controls.
-- No gyroscope data is read, and gyroscope steering is not modified.
+### DualSense Haptics
+
+- CSP native DualSense semantic layers cover engine texture, road and bodywork impacts, curb detail, tire skid, gear shifts, rev limiter behavior, and collisions.
+- A compatibility grip layer adds `vibrationLeft / vibrationRight` output alongside CSP native haptics for extra engine texture, road detail, and shift impact.
+- Overall grip-vibration strength can be adjusted globally without changing L2 or R2 adaptive-trigger resistance.
+- Diagnostic isolation tests can temporarily emphasize the Engine, Wheel, Bodywork, or Skid layer to help identify missing feedback.
+- Live telemetry exposes curb activity, tire-slip values, Bodywork gain and pitch, and Skid gain and pitch.
+
+### Adaptive Triggers
+
+- L2 provides progressive braking resistance with an adjustable resistance curve.
+- ABS intervention is represented by configurable L2 pulse depth and pulse speed.
+- R2 provides progressive throttle resistance, wheelspin cues, rev-limiter pulses, upshift rebound, and a subtle downshift throttle-blip cue.
+- Advanced trigger settings remain available for sensitivity, strength, timing, and pulse frequency tuning.
+
+### Driving Assists And UI
+
+- Controller steering assist includes simplified and detailed modes, calibration, steering presets, graphs, gamma, deadzone, self-steer response, damping, and countersteer controls.
+- Automatic clutch helps with launches and stall prevention. Optional custom shifting modes add rev-matching and automatic shifting behavior where supported.
+- The overview page provides core switches, three feedback presets, custom preset save and load actions, and common driving-assist controls.
+- The advanced-settings window is independent, movable, resizable, and divided into Steering, Feedback, and Diagnostics tabs.
+- No gyroscope or accelerometer data is read, and gyroscope steering is not modified.
 
 ## Downloads
 
-- [English package](releases/DualSense-Gamepad-Assist-0.6.2-EN.zip)
-- [Chinese package](releases/DualSense-Gamepad-Assist-0.6.2-CN.zip)
+- [English package](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v0.6.2/DualSense-Gamepad-Assist-0.6.2-EN.zip)
+- [Chinese package](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v0.6.2/DualSense-Gamepad-Assist-0.6.2-CN.zip)
+- [GitHub Releases](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases)
 
 ## Installation
 

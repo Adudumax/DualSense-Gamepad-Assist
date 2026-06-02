@@ -4,22 +4,36 @@
 
 DualSense Gamepad Assist 是一个面向 Assetto Corsa CSP `Gamepad FX` 的 DualSense 脚本。它在一个游戏内控制面板中整合了游戏手柄转向辅助、自动离合、可选自动换挡、CSP 原生触觉和自适应扳机。
 
-`0.6.2` 保持已经验证满意的 `0.6.1` 震动反馈不变。本次发布将内部命名整理为 DGA，提供独立的中文包和英文包，并准备了适合公开发布的源码快照。
-
 ## 特点
 
-- CSP 原生 DualSense 触觉：发动机质感、路肩、车身冲击、轮胎侧滑、换挡和碰撞。
-- `0.5.1` 兼容握把补充层：使用 `vibrationLeft / vibrationRight`，与原生触觉并行工作。
-- 自适应扳机：L2 刹车阻力和 ABS 提示；R2 油门阻力、驱动轮空转、高转红线脉冲和换挡回弹。
-- 首页总览：反馈预设、自定义预设保存与载入、握把震动总强度。
-- 独立高级设置窗口：可以自由移动和调整大小。
-- 转向辅助、自动离合、可选自动换挡、校准、图表、Gamma 和死区控制。
-- 不读取陀螺仪数据，也不修改陀螺仪转向。
+### DualSense 触觉
+
+- CSP 原生 DualSense 语义层覆盖发动机质感、车身与路面冲击、路肩细节、轮胎侧滑、换挡、高转红线和碰撞。
+- 兼容握把补充层使用 `vibrationLeft / vibrationRight`，与 CSP 原生触觉并行工作，补充发动机细震、路面纹理和换挡冲击。
+- 首页可以统一调节握把震动总强度，不会改变 L2 或 R2 自适应扳机阻力。
+- 诊断页可以临时隔离强化 Engine、Wheel、Bodywork 或 Skid 层，方便确认缺失的反馈来源。
+- 实时遥测会显示左右路肩、轮胎侧滑、Bodywork 增益和音调、Skid 增益和音调。
+
+### 自适应扳机
+
+- L2 提供渐进式刹车阻力，并支持调整阻力曲线。
+- ABS 介入时，L2 会提供可调节深度和速度的脉冲提示。
+- R2 提供渐进式油门阻力、驱动轮空转提示、高转红线脉冲、升挡回弹和轻微降挡补油提示。
+- 高级设置中可以继续微调灵敏度、强度、持续时间和脉冲频率。
+
+### 驾驶辅助与界面
+
+- 手柄转向辅助提供简化和完整两种设置方式，包含校准、预设、图表、Gamma、死区、自动回正、阻尼和反打响应。
+- 自动离合可以辅助起步并防止熄火；在车辆支持时，可选换挡模式还会提供补油和自动换挡逻辑。
+- 首页总览集中显示核心开关、三组反馈预设、自定义预设保存与载入，以及常用驾驶辅助选项。
+- 高级设置使用独立窗口，可以自由移动和调整大小，并分为转向、反馈和诊断三个页面。
+- 不读取陀螺仪或加速度计数据，也不修改陀螺仪转向。
 
 ## 下载
 
-- [中文版](releases/DualSense-Gamepad-Assist-0.6.2-CN.zip)
-- [English package](releases/DualSense-Gamepad-Assist-0.6.2-EN.zip)
+- [中文版](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v0.6.2/DualSense-Gamepad-Assist-0.6.2-CN.zip)
+- [English package](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v0.6.2/DualSense-Gamepad-Assist-0.6.2-EN.zip)
+- [GitHub Releases](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases)
 
 ## 安装
 
