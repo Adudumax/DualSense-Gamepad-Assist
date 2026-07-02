@@ -7,18 +7,36 @@ end
 
 if car.isAIControlled then return end
 
-local lib                = require "DGALib"
+local lib                = require "AssistCore"
 local extras             = require "extras"
 local dualSenseFeedback  = require "dualsense_feedback"
+local gyroInput          = require('gyro_input')
 local CarPerformanceData = require "CarPerformanceData"
+
+local function runDualSenseTest(effect, message)
+    dualSenseFeedback.test(effect)
+    ac.setMessage("DualSense Gamepad Assist 1.0.0", message)
+end
 
 local function runDualSenseNativeTest(effect, message)
     dualSenseFeedback.testNative(effect)
-    ac.setMessage("DGA 0.6.2 English", message)
+    ac.setMessage("DualSense Gamepad Assist 1.0.0", message)
 end
 
+ac.onSharedEvent("DSGA_testDualSenseCurb", function()
+    runDualSenseTest("curb", "Received test event: simulated curb")
+end)
+
+ac.onSharedEvent("DSGA_testDualSenseFrontSlip", function()
+    runDualSenseTest("frontSlip", "Received test event: simulated front understeer")
+end)
+
+ac.onSharedEvent("DSGA_testDualSenseRearSlip", function()
+    runDualSenseTest("rearSlip", "Received test event: simulated rear oversteer")
+end)
+
 ac.onSharedEvent("DSGA_testDualSenseNativeEngine", function()
-    runDualSenseNativeTest("engine", "Native Engine layer boosted for 10 seconds: compare at idle or while revving")
+    runDualSenseNativeTest("engine", "Native Engine layer boosted for 10 seconds: compare while idling or revving in neutral")
 end)
 
 ac.onSharedEvent("DSGA_testDualSenseNativeWheel", function()
@@ -30,7 +48,7 @@ ac.onSharedEvent("DSGA_testDualSenseNativeBodywork", function()
 end)
 
 ac.onSharedEvent("DSGA_testDualSenseNativeSkid", function()
-    runDualSenseNativeTest("skid", "Native Skid layer only for 15 seconds: induce tire slip now")
+    runDualSenseNativeTest("skid", "Native Skid layer only for 15 seconds: create tire slip now")
 end)
 
 -- CONFIG =====================================================================================
@@ -50,7 +68,13 @@ local uiData = ac.connect{
     _gameRumble              = ac.StructItem.double(),
     _rawSteer                = ac.StructItem.double(),
     _finalSteer              = ac.StructItem.double(),
+    _dualSenseCurbLeft       = ac.StructItem.double(),
+    _dualSenseCurbRight      = ac.StructItem.double(),
+    _dualSenseOutputLeft     = ac.StructItem.double(),
+    _dualSenseOutputRight    = ac.StructItem.double(),
     _dualSenseDetected       = ac.StructItem.boolean(),
+    _dualSenseTestActive     = ac.StructItem.boolean(),
+    _dualSenseRumbleEffects  = ac.StructItem.double(),
     _dualSenseNativeHapticsAvailable = ac.StructItem.boolean(),
     _dualSenseNativeTestSeconds = ac.StructItem.double(),
     _dualSenseNativeTestMode  = ac.StructItem.int32(),
@@ -73,8 +97,6 @@ local uiData = ac.connect{
     autoShiftingCruise       = ac.StructItem.boolean(),
     autoShiftingDownBias     = ac.StructItem.double(),
     dualSenseEnabled         = ac.StructItem.boolean(),
-    dualSenseGlobalStrength  = ac.StructItem.double(),
-    dualSenseLegacyBodyVibration = ac.StructItem.boolean(),
     dualSenseNativeHapticsEnabled = ac.StructItem.boolean(),
     dualSenseNativeBodyworkStrength = ac.StructItem.double(),
     dualSenseNativeEngineStrength = ac.StructItem.double(),
@@ -90,7 +112,26 @@ local uiData = ac.connect{
     dualSenseNativeSkidThreshold = ac.StructItem.double(),
     dualSenseNativeSkidEngineDucking = ac.StructItem.double(),
     dualSenseNativeSkidAxlePitchSeparation = ac.StructItem.double(),
+    dualSenseNativeMasterStrength = ac.StructItem.double(),
+    dualSenseBodyVibration   = ac.StructItem.boolean(),
+    dualSenseBodyStrength    = ac.StructItem.double(),
+    dualSenseBodyOutputBoost = ac.StructItem.double(),
+    dualSenseBodyDetailStacking = ac.StructItem.double(),
+    dualSenseBodyMinimumOutput = ac.StructItem.double(),
+    dualSenseEngineStrength  = ac.StructItem.double(),
+    dualSenseRoadStrength    = ac.StructItem.double(),
+    dualSenseSlideStrength   = ac.StructItem.double(),
+    dualSenseGripLossStrength = ac.StructItem.double(),
+    dualSenseFrontSlipStrength = ac.StructItem.double(),
+    dualSenseRearSlipStrength = ac.StructItem.double(),
     dualSenseSlipThreshold   = ac.StructItem.double(),
+    dualSenseCurbStrength    = ac.StructItem.double(),
+    dualSenseDirectionalCrossfeed = ac.StructItem.double(),
+    dualSenseDirtStrength    = ac.StructItem.double(),
+    dualSenseCollisionStrength = ac.StructItem.double(),
+    dualSenseABSStrength     = ac.StructItem.double(),
+    dualSenseShiftStrength   = ac.StructItem.double(),
+    dualSenseDownshiftStrength = ac.StructItem.double(),
     dualSenseShiftDuration   = ac.StructItem.double(),
     dualSenseTriggersEnabled = ac.StructItem.boolean(),
     dualSenseBrakeResistance = ac.StructItem.double(),
@@ -106,6 +147,17 @@ local uiData = ac.connect{
     dualSenseLimiterFrequency = ac.StructItem.double(),
     dualSenseShiftResistance = ac.StructItem.double(),
     dualSenseDownshiftThrottleKick = ac.StructItem.double(),
+    dualSenseTriggerMasterStrength = ac.StructItem.double(),
+    dualSenseBrakeDeadzone = ac.StructItem.double(),
+    dualSenseThrottleDeadzone = ac.StructItem.double(),
+    dualSenseBrakeForceFloor = ac.StructItem.double(),
+    dualSenseThrottleForceFloor = ac.StructItem.double(),
+    dualSenseBrakeWallAt = ac.StructItem.double(),
+    dualSenseThrottleWallAt = ac.StructItem.double(),
+    dualSenseBrakeWallForce = ac.StructItem.double(),
+    dualSenseThrottleWallForce = ac.StructItem.double(),
+    dualSensePulseReleaseDepth = ac.StructItem.double(),
+    dualSensePulsePeakForce = ac.StructItem.double(),
     useFilter                = ac.StructItem.boolean(),
     filterSetting            = ac.StructItem.double(),
     steeringRate             = ac.StructItem.double(),
@@ -116,6 +168,18 @@ local uiData = ac.connect{
     maxSelfSteerAngle        = ac.StructItem.double(),
     countersteerResponse     = ac.StructItem.double(),
     maxDynamicLimitReduction = ac.StructItem.double(), -- Stores 10x the value for legacy reasons
+    gyroSteeringEnabled      = ac.StructItem.boolean(),
+    gyroSteeringSensitivity  = ac.StructItem.double(),
+    gyroSteeringDeadzone     = ac.StructItem.double(),
+    gyroSteeringSmoothing    = ac.StructItem.double(),
+    gyroSteeringCentering    = ac.StructItem.double(),
+    gyroSteeringMaxAngle     = ac.StructItem.double(),
+    gyroSteeringHighSpeedStability = ac.StructItem.double(),
+    gyroSteeringStickBlend   = ac.StructItem.double(),
+    gyroSteeringInvert       = ac.StructItem.boolean(),
+    _gyroSteeringAvailable   = ac.StructItem.boolean(),
+    _gyroSteeringRaw         = ac.StructItem.double(),
+    _gyroSteeringOutput      = ac.StructItem.double(),
     photoMode                = ac.StructItem.boolean()
 }
 
@@ -135,39 +199,67 @@ local savedCfg = ac.storage({
     autoShiftingCruise       = true,
     autoShiftingDownBias     = 0.9,
     dualSenseEnabled         = true,
-    dualSenseGlobalStrength  = 1.00,
-    dualSenseLegacyBodyVibration = true,
     dualSenseNativeHapticsEnabled = true,
-    dualSenseNativeBodyworkStrength = 0.95,
-    dualSenseNativeEngineStrength = 0.22,
-    dualSenseNativeGearStrength = 1.30,
-    dualSenseNativeLimiterStrength = 1.20,
-    dualSenseNativeSkidStrength = 5.20,
-    dualSenseNativeWheelStrength = 0.60,
-    dualSenseNativeCollisionStrength = 3.00,
-    dualSenseNativeCurbBoost = 1.35,
+    dualSenseNativeBodyworkStrength = 1.15,
+    dualSenseNativeEngineStrength = 0.30,
+    dualSenseNativeGearStrength = 1.55,
+    dualSenseNativeLimiterStrength = 1.45,
+    dualSenseNativeSkidStrength = 6.80,
+    dualSenseNativeWheelStrength = 0.95,
+    dualSenseNativeCollisionStrength = 3.80,
+    dualSenseNativeCurbBoost = 1.55,
     dualSenseNativeSidePitchSeparation = 0.14,
-    dualSenseNativeCurbEngineDucking = 0.82,
-    dualSenseNativeSkidDynamicBoost = 0.75,
-    dualSenseNativeSkidThreshold = 1.02,
-    dualSenseNativeSkidEngineDucking = 0.82,
+    dualSenseNativeCurbEngineDucking = 0.64,
+    dualSenseNativeSkidDynamicBoost = 0.95,
+    dualSenseNativeSkidThreshold = 0.92,
+    dualSenseNativeSkidEngineDucking = 0.58,
     dualSenseNativeSkidAxlePitchSeparation = 0.10,
-    dualSenseSlipThreshold   = 0.68,
-    dualSenseShiftDuration   = 0.115,
+    dualSenseNativeMasterStrength = 1.25,
+    dualSenseBodyVibration   = true,
+    dualSenseBodyStrength    = 1.0,
+    dualSenseBodyOutputBoost = 1.35,
+    dualSenseBodyDetailStacking = 0.42,
+    dualSenseBodyMinimumOutput = 0.12,
+    dualSenseEngineStrength  = 0.06,
+    dualSenseRoadStrength    = 0.78,
+    dualSenseSlideStrength   = 0.82,
+    dualSenseGripLossStrength = 1.12,
+    dualSenseFrontSlipStrength = 1.08,
+    dualSenseRearSlipStrength = 1.18,
+    dualSenseSlipThreshold   = 0.58,
+    dualSenseCurbStrength    = 1.25,
+    dualSenseDirectionalCrossfeed = 0.10,
+    dualSenseDirtStrength    = 0.88,
+    dualSenseCollisionStrength = 1.20,
+    dualSenseABSStrength     = 1.0,
+    dualSenseShiftStrength   = 0.92,
+    dualSenseDownshiftStrength = 0.84,
+    dualSenseShiftDuration   = 0.13,
     dualSenseTriggersEnabled = true,
-    dualSenseBrakeResistance = 0.48,
-    dualSenseThrottleResistance = 0.12,
-    dualSenseBrakeCurve      = 1.35,
-    dualSenseThrottleCurve   = 1.45,
-    dualSenseABSFeedback     = 0.90,
-    dualSenseABSFrequency    = 14.0,
-    dualSenseWheelspinFeedback = 0.88,
-    dualSenseWheelspinThreshold = 1.02,
-    dualSenseWheelspinFrequency = 18.0,
-    dualSenseLimiterResistance = 0.30,
-    dualSenseLimiterFrequency = 30.0,
-    dualSenseShiftResistance = 0.78,
-    dualSenseDownshiftThrottleKick = 0.18,
+    dualSenseBrakeResistance = 0.40,
+    dualSenseThrottleResistance = 0.14,
+    dualSenseBrakeCurve      = 1.05,
+    dualSenseThrottleCurve   = 1.15,
+    dualSenseABSFeedback     = 1.0,
+    dualSenseABSFrequency    = 16.0,
+    dualSenseWheelspinFeedback = 1.0,
+    dualSenseWheelspinThreshold = 0.88,
+    dualSenseWheelspinFrequency = 20.0,
+    dualSenseLimiterResistance = 0.78,
+    dualSenseLimiterFrequency = 28.0,
+    dualSenseShiftResistance = 0.95,
+    dualSenseDownshiftThrottleKick = 0.28,
+    dualSenseTriggerMasterStrength = 1.08,
+    dualSenseBrakeDeadzone = 0.035,
+    dualSenseThrottleDeadzone = 0.025,
+    dualSenseBrakeForceFloor = 0.07,
+    dualSenseThrottleForceFloor = 0.035,
+    dualSenseBrakeWallAt = 0.88,
+    dualSenseThrottleWallAt = 0.97,
+    dualSenseBrakeWallForce = 0.72,
+    dualSenseThrottleWallForce = 0.18,
+    dualSensePulseReleaseDepth = 0.92,
+    dualSensePulsePeakForce = 0.68,
     useFilter                = true,
     filterSetting            = 0.5,
     steeringRate             = 0.5,
@@ -178,8 +270,18 @@ local savedCfg = ac.storage({
     maxSelfSteerAngle        = 90.0,
     countersteerResponse     = 0.2,
     maxDynamicLimitReduction = 5.0,
+    gyroSteeringEnabled      = false,
+    gyroSteeringSensitivity  = 0.50,
+    gyroSteeringDeadzone     = 0.0,
+    gyroSteeringSmoothing    = 0.0,
+    gyroSteeringCentering    = 0.55,
+    gyroSteeringMaxAngle     = 90.0,
+    gyroSteeringHighSpeedStability = 0.0,
+    gyroSteeringStickBlend   = 0.0,
+    gyroSteeringInvert       = false,
+    gyroSteeringProfileVersion = 108,
     photoMode                = false
-}, "DSGA_061_")
+}, "DSGA_REFINE_103_")
 
 -- controls.ini stuff
 
@@ -239,39 +341,67 @@ ac.onSharedEvent("DSGA_factoryReset", function()
     uiData.autoShiftingCruise       = true
     uiData.autoShiftingDownBias     = 0.9
     uiData.dualSenseEnabled         = true
-    uiData.dualSenseGlobalStrength  = 1.00
-    uiData.dualSenseLegacyBodyVibration = true
     uiData.dualSenseNativeHapticsEnabled = true
-    uiData.dualSenseNativeBodyworkStrength = 0.95
-    uiData.dualSenseNativeEngineStrength = 0.22
-    uiData.dualSenseNativeGearStrength = 1.30
-    uiData.dualSenseNativeLimiterStrength = 1.20
-    uiData.dualSenseNativeSkidStrength = 5.20
-    uiData.dualSenseNativeWheelStrength = 0.60
-    uiData.dualSenseNativeCollisionStrength = 3.00
-    uiData.dualSenseNativeCurbBoost = 1.35
+    uiData.dualSenseNativeBodyworkStrength = 1.15
+    uiData.dualSenseNativeEngineStrength = 0.30
+    uiData.dualSenseNativeGearStrength = 1.55
+    uiData.dualSenseNativeLimiterStrength = 1.45
+    uiData.dualSenseNativeSkidStrength = 6.80
+    uiData.dualSenseNativeWheelStrength = 0.95
+    uiData.dualSenseNativeCollisionStrength = 3.80
+    uiData.dualSenseNativeCurbBoost = 1.55
     uiData.dualSenseNativeSidePitchSeparation = 0.14
-    uiData.dualSenseNativeCurbEngineDucking = 0.82
-    uiData.dualSenseNativeSkidDynamicBoost = 0.75
-    uiData.dualSenseNativeSkidThreshold = 1.02
-    uiData.dualSenseNativeSkidEngineDucking = 0.82
+    uiData.dualSenseNativeCurbEngineDucking = 0.64
+    uiData.dualSenseNativeSkidDynamicBoost = 0.95
+    uiData.dualSenseNativeSkidThreshold = 0.92
+    uiData.dualSenseNativeSkidEngineDucking = 0.58
     uiData.dualSenseNativeSkidAxlePitchSeparation = 0.10
-    uiData.dualSenseSlipThreshold   = 0.68
-    uiData.dualSenseShiftDuration   = 0.115
+    uiData.dualSenseNativeMasterStrength = 1.25
+    uiData.dualSenseBodyVibration   = true
+    uiData.dualSenseBodyStrength    = 1.0
+    uiData.dualSenseBodyOutputBoost = 1.35
+    uiData.dualSenseBodyDetailStacking = 0.42
+    uiData.dualSenseBodyMinimumOutput = 0.12
+    uiData.dualSenseEngineStrength  = 0.06
+    uiData.dualSenseRoadStrength    = 0.78
+    uiData.dualSenseSlideStrength   = 0.82
+    uiData.dualSenseGripLossStrength = 1.12
+    uiData.dualSenseFrontSlipStrength = 1.08
+    uiData.dualSenseRearSlipStrength = 1.18
+    uiData.dualSenseSlipThreshold   = 0.58
+    uiData.dualSenseCurbStrength    = 1.25
+    uiData.dualSenseDirectionalCrossfeed = 0.10
+    uiData.dualSenseDirtStrength    = 0.88
+    uiData.dualSenseCollisionStrength = 1.20
+    uiData.dualSenseABSStrength     = 1.0
+    uiData.dualSenseShiftStrength   = 0.92
+    uiData.dualSenseDownshiftStrength = 0.84
+    uiData.dualSenseShiftDuration   = 0.13
     uiData.dualSenseTriggersEnabled = true
-    uiData.dualSenseBrakeResistance = 0.48
-    uiData.dualSenseThrottleResistance = 0.12
-    uiData.dualSenseBrakeCurve      = 1.35
-    uiData.dualSenseThrottleCurve   = 1.45
-    uiData.dualSenseABSFeedback     = 0.90
-    uiData.dualSenseABSFrequency    = 14.0
-    uiData.dualSenseWheelspinFeedback = 0.88
-    uiData.dualSenseWheelspinThreshold = 1.02
-    uiData.dualSenseWheelspinFrequency = 18.0
-    uiData.dualSenseLimiterResistance = 0.30
-    uiData.dualSenseLimiterFrequency = 30.0
-    uiData.dualSenseShiftResistance = 0.78
-    uiData.dualSenseDownshiftThrottleKick = 0.18
+    uiData.dualSenseBrakeResistance = 0.40
+    uiData.dualSenseThrottleResistance = 0.14
+    uiData.dualSenseBrakeCurve      = 1.05
+    uiData.dualSenseThrottleCurve   = 1.15
+    uiData.dualSenseABSFeedback     = 1.0
+    uiData.dualSenseABSFrequency    = 16.0
+    uiData.dualSenseWheelspinFeedback = 1.0
+    uiData.dualSenseWheelspinThreshold = 0.88
+    uiData.dualSenseWheelspinFrequency = 20.0
+    uiData.dualSenseLimiterResistance = 0.78
+    uiData.dualSenseLimiterFrequency = 28.0
+    uiData.dualSenseShiftResistance = 0.95
+    uiData.dualSenseDownshiftThrottleKick = 0.28
+    uiData.dualSenseTriggerMasterStrength = 1.08
+    uiData.dualSenseBrakeDeadzone = 0.035
+    uiData.dualSenseThrottleDeadzone = 0.025
+    uiData.dualSenseBrakeForceFloor = 0.07
+    uiData.dualSenseThrottleForceFloor = 0.035
+    uiData.dualSenseBrakeWallAt = 0.88
+    uiData.dualSenseThrottleWallAt = 0.97
+    uiData.dualSenseBrakeWallForce = 0.72
+    uiData.dualSenseThrottleWallForce = 0.18
+    uiData.dualSensePulseReleaseDepth = 0.92
+    uiData.dualSensePulsePeakForce = 0.68
     uiData.useFilter                = true
     uiData.filterSetting            = 0.5
     uiData.steeringRate             = 0.5
@@ -282,10 +412,23 @@ ac.onSharedEvent("DSGA_factoryReset", function()
     uiData.maxSelfSteerAngle        = 90.0
     uiData.countersteerResponse     = 0.2
     uiData.maxDynamicLimitReduction = 5.0
+    uiData.gyroSteeringEnabled      = false
+    uiData.gyroSteeringSensitivity  = 0.50
+    uiData.gyroSteeringDeadzone     = 0.0
+    uiData.gyroSteeringSmoothing    = 0.0
+    uiData.gyroSteeringCentering    = 0.55
+    uiData.gyroSteeringMaxAngle     = 90.0
+    uiData.gyroSteeringHighSpeedStability = 0.0
+    uiData.gyroSteeringStickBlend   = 0.0
+    uiData.gyroSteeringInvert       = false
     uiData.photoMode                = false
 
     onFirstInstall()
     ac.broadcastSharedEvent("DSGA_reloadControlSettings")
+end)
+
+ac.onSharedEvent("DSGA_resetGyroCenter", function()
+    gyroInput.resetCenter()
 end)
 
 
@@ -315,8 +458,6 @@ uiData.autoShiftingMode         = savedCfg.autoShiftingMode
 uiData.autoShiftingCruise       = savedCfg.autoShiftingCruise
 uiData.autoShiftingDownBias     = savedCfg.autoShiftingDownBias
 uiData.dualSenseEnabled         = savedCfg.dualSenseEnabled
-uiData.dualSenseGlobalStrength  = savedCfg.dualSenseGlobalStrength
-uiData.dualSenseLegacyBodyVibration = savedCfg.dualSenseLegacyBodyVibration
 uiData.dualSenseNativeHapticsEnabled = savedCfg.dualSenseNativeHapticsEnabled
 uiData.dualSenseNativeBodyworkStrength = savedCfg.dualSenseNativeBodyworkStrength
 uiData.dualSenseNativeEngineStrength = savedCfg.dualSenseNativeEngineStrength
@@ -332,7 +473,26 @@ uiData.dualSenseNativeSkidDynamicBoost = savedCfg.dualSenseNativeSkidDynamicBoos
 uiData.dualSenseNativeSkidThreshold = savedCfg.dualSenseNativeSkidThreshold
 uiData.dualSenseNativeSkidEngineDucking = savedCfg.dualSenseNativeSkidEngineDucking
 uiData.dualSenseNativeSkidAxlePitchSeparation = savedCfg.dualSenseNativeSkidAxlePitchSeparation
+uiData.dualSenseNativeMasterStrength = savedCfg.dualSenseNativeMasterStrength
+uiData.dualSenseBodyVibration   = savedCfg.dualSenseBodyVibration
+uiData.dualSenseBodyStrength    = savedCfg.dualSenseBodyStrength
+uiData.dualSenseBodyOutputBoost = savedCfg.dualSenseBodyOutputBoost
+uiData.dualSenseBodyDetailStacking = savedCfg.dualSenseBodyDetailStacking
+uiData.dualSenseBodyMinimumOutput = savedCfg.dualSenseBodyMinimumOutput
+uiData.dualSenseEngineStrength  = savedCfg.dualSenseEngineStrength
+uiData.dualSenseRoadStrength    = savedCfg.dualSenseRoadStrength
+uiData.dualSenseSlideStrength   = savedCfg.dualSenseSlideStrength
+uiData.dualSenseGripLossStrength = savedCfg.dualSenseGripLossStrength
+uiData.dualSenseFrontSlipStrength = savedCfg.dualSenseFrontSlipStrength
+uiData.dualSenseRearSlipStrength = savedCfg.dualSenseRearSlipStrength
 uiData.dualSenseSlipThreshold   = savedCfg.dualSenseSlipThreshold
+uiData.dualSenseCurbStrength    = savedCfg.dualSenseCurbStrength
+uiData.dualSenseDirectionalCrossfeed = savedCfg.dualSenseDirectionalCrossfeed
+uiData.dualSenseDirtStrength    = savedCfg.dualSenseDirtStrength
+uiData.dualSenseCollisionStrength = savedCfg.dualSenseCollisionStrength
+uiData.dualSenseABSStrength     = savedCfg.dualSenseABSStrength
+uiData.dualSenseShiftStrength   = savedCfg.dualSenseShiftStrength
+uiData.dualSenseDownshiftStrength = savedCfg.dualSenseDownshiftStrength
 uiData.dualSenseShiftDuration   = savedCfg.dualSenseShiftDuration
 uiData.dualSenseTriggersEnabled = savedCfg.dualSenseTriggersEnabled
 uiData.dualSenseBrakeResistance = savedCfg.dualSenseBrakeResistance
@@ -348,6 +508,17 @@ uiData.dualSenseLimiterResistance = savedCfg.dualSenseLimiterResistance
 uiData.dualSenseLimiterFrequency = savedCfg.dualSenseLimiterFrequency
 uiData.dualSenseShiftResistance = savedCfg.dualSenseShiftResistance
 uiData.dualSenseDownshiftThrottleKick = savedCfg.dualSenseDownshiftThrottleKick
+uiData.dualSenseTriggerMasterStrength = savedCfg.dualSenseTriggerMasterStrength
+uiData.dualSenseBrakeDeadzone = savedCfg.dualSenseBrakeDeadzone
+uiData.dualSenseThrottleDeadzone = savedCfg.dualSenseThrottleDeadzone
+uiData.dualSenseBrakeForceFloor = savedCfg.dualSenseBrakeForceFloor
+uiData.dualSenseThrottleForceFloor = savedCfg.dualSenseThrottleForceFloor
+uiData.dualSenseBrakeWallAt = savedCfg.dualSenseBrakeWallAt
+uiData.dualSenseThrottleWallAt = savedCfg.dualSenseThrottleWallAt
+uiData.dualSenseBrakeWallForce = savedCfg.dualSenseBrakeWallForce
+uiData.dualSenseThrottleWallForce = savedCfg.dualSenseThrottleWallForce
+uiData.dualSensePulseReleaseDepth = savedCfg.dualSensePulseReleaseDepth
+uiData.dualSensePulsePeakForce = savedCfg.dualSensePulsePeakForce
 uiData.filterSetting            = savedCfg.filterSetting
 uiData.steeringRate             = savedCfg.steeringRate
 uiData.targetSlip               = savedCfg.targetSlip
@@ -357,6 +528,25 @@ uiData.dampingStrength          = savedCfg.dampingStrength
 uiData.maxSelfSteerAngle        = savedCfg.maxSelfSteerAngle
 uiData.countersteerResponse     = savedCfg.countersteerResponse
 uiData.maxDynamicLimitReduction = savedCfg.maxDynamicLimitReduction
+uiData.gyroSteeringEnabled      = savedCfg.gyroSteeringEnabled
+uiData.gyroSteeringSensitivity  = savedCfg.gyroSteeringSensitivity
+uiData.gyroSteeringDeadzone     = savedCfg.gyroSteeringDeadzone
+uiData.gyroSteeringSmoothing    = savedCfg.gyroSteeringSmoothing
+uiData.gyroSteeringCentering    = savedCfg.gyroSteeringCentering
+uiData.gyroSteeringMaxAngle     = savedCfg.gyroSteeringMaxAngle
+uiData.gyroSteeringHighSpeedStability = savedCfg.gyroSteeringHighSpeedStability
+uiData.gyroSteeringStickBlend   = savedCfg.gyroSteeringStickBlend
+uiData.gyroSteeringInvert       = savedCfg.gyroSteeringInvert
+if savedCfg.gyroSteeringProfileVersion ~= 108 then
+    uiData.gyroSteeringSensitivity = 0.50
+    uiData.gyroSteeringDeadzone = 0.0
+    uiData.gyroSteeringSmoothing = 0.0
+    uiData.gyroSteeringCentering = 0.55
+    uiData.gyroSteeringMaxAngle = 90.0
+    uiData.gyroSteeringHighSpeedStability = 0.0
+    uiData.gyroSteeringStickBlend = 0.0
+    savedCfg.gyroSteeringProfileVersion = 108
+end
 uiData.photoMode                = savedCfg.photoMode
 
 -- MAIN LOGIC =================================================================================
@@ -418,8 +608,6 @@ local function updateConfig()
     savedCfg.autoShiftingCruise       = uiData.autoShiftingCruise
     savedCfg.autoShiftingDownBias     = uiData.autoShiftingDownBias
     savedCfg.dualSenseEnabled         = uiData.dualSenseEnabled
-    savedCfg.dualSenseGlobalStrength  = uiData.dualSenseGlobalStrength
-    savedCfg.dualSenseLegacyBodyVibration = uiData.dualSenseLegacyBodyVibration
     savedCfg.dualSenseNativeHapticsEnabled = uiData.dualSenseNativeHapticsEnabled
     savedCfg.dualSenseNativeBodyworkStrength = uiData.dualSenseNativeBodyworkStrength
     savedCfg.dualSenseNativeEngineStrength = uiData.dualSenseNativeEngineStrength
@@ -435,7 +623,26 @@ local function updateConfig()
     savedCfg.dualSenseNativeSkidThreshold = uiData.dualSenseNativeSkidThreshold
     savedCfg.dualSenseNativeSkidEngineDucking = uiData.dualSenseNativeSkidEngineDucking
     savedCfg.dualSenseNativeSkidAxlePitchSeparation = uiData.dualSenseNativeSkidAxlePitchSeparation
+    savedCfg.dualSenseNativeMasterStrength = uiData.dualSenseNativeMasterStrength
+    savedCfg.dualSenseBodyVibration   = uiData.dualSenseBodyVibration
+    savedCfg.dualSenseBodyStrength    = uiData.dualSenseBodyStrength
+    savedCfg.dualSenseBodyOutputBoost = uiData.dualSenseBodyOutputBoost
+    savedCfg.dualSenseBodyDetailStacking = uiData.dualSenseBodyDetailStacking
+    savedCfg.dualSenseBodyMinimumOutput = uiData.dualSenseBodyMinimumOutput
+    savedCfg.dualSenseEngineStrength  = uiData.dualSenseEngineStrength
+    savedCfg.dualSenseRoadStrength    = uiData.dualSenseRoadStrength
+    savedCfg.dualSenseSlideStrength   = uiData.dualSenseSlideStrength
+    savedCfg.dualSenseGripLossStrength = uiData.dualSenseGripLossStrength
+    savedCfg.dualSenseFrontSlipStrength = uiData.dualSenseFrontSlipStrength
+    savedCfg.dualSenseRearSlipStrength = uiData.dualSenseRearSlipStrength
     savedCfg.dualSenseSlipThreshold   = uiData.dualSenseSlipThreshold
+    savedCfg.dualSenseCurbStrength    = uiData.dualSenseCurbStrength
+    savedCfg.dualSenseDirectionalCrossfeed = uiData.dualSenseDirectionalCrossfeed
+    savedCfg.dualSenseDirtStrength    = uiData.dualSenseDirtStrength
+    savedCfg.dualSenseCollisionStrength = uiData.dualSenseCollisionStrength
+    savedCfg.dualSenseABSStrength     = uiData.dualSenseABSStrength
+    savedCfg.dualSenseShiftStrength   = uiData.dualSenseShiftStrength
+    savedCfg.dualSenseDownshiftStrength = uiData.dualSenseDownshiftStrength
     savedCfg.dualSenseShiftDuration   = uiData.dualSenseShiftDuration
     savedCfg.dualSenseTriggersEnabled = uiData.dualSenseTriggersEnabled
     savedCfg.dualSenseBrakeResistance = uiData.dualSenseBrakeResistance
@@ -451,6 +658,17 @@ local function updateConfig()
     savedCfg.dualSenseLimiterFrequency = uiData.dualSenseLimiterFrequency
     savedCfg.dualSenseShiftResistance = uiData.dualSenseShiftResistance
     savedCfg.dualSenseDownshiftThrottleKick = uiData.dualSenseDownshiftThrottleKick
+    savedCfg.dualSenseTriggerMasterStrength = uiData.dualSenseTriggerMasterStrength
+    savedCfg.dualSenseBrakeDeadzone = uiData.dualSenseBrakeDeadzone
+    savedCfg.dualSenseThrottleDeadzone = uiData.dualSenseThrottleDeadzone
+    savedCfg.dualSenseBrakeForceFloor = uiData.dualSenseBrakeForceFloor
+    savedCfg.dualSenseThrottleForceFloor = uiData.dualSenseThrottleForceFloor
+    savedCfg.dualSenseBrakeWallAt = uiData.dualSenseBrakeWallAt
+    savedCfg.dualSenseThrottleWallAt = uiData.dualSenseThrottleWallAt
+    savedCfg.dualSenseBrakeWallForce = uiData.dualSenseBrakeWallForce
+    savedCfg.dualSenseThrottleWallForce = uiData.dualSenseThrottleWallForce
+    savedCfg.dualSensePulseReleaseDepth = uiData.dualSensePulseReleaseDepth
+    savedCfg.dualSensePulsePeakForce = uiData.dualSensePulsePeakForce
     savedCfg.filterSetting            = uiData.filterSetting
     savedCfg.steeringRate             = uiData.steeringRate
     savedCfg.targetSlip               = uiData.targetSlip
@@ -460,6 +678,16 @@ local function updateConfig()
     savedCfg.maxSelfSteerAngle        = uiData.maxSelfSteerAngle
     savedCfg.countersteerResponse     = uiData.countersteerResponse
     savedCfg.maxDynamicLimitReduction = uiData.maxDynamicLimitReduction
+    savedCfg.gyroSteeringEnabled      = uiData.gyroSteeringEnabled
+    savedCfg.gyroSteeringSensitivity  = uiData.gyroSteeringSensitivity
+    savedCfg.gyroSteeringDeadzone     = uiData.gyroSteeringDeadzone
+    savedCfg.gyroSteeringSmoothing    = uiData.gyroSteeringSmoothing
+    savedCfg.gyroSteeringCentering    = uiData.gyroSteeringCentering
+    savedCfg.gyroSteeringMaxAngle     = uiData.gyroSteeringMaxAngle
+    savedCfg.gyroSteeringHighSpeedStability = uiData.gyroSteeringHighSpeedStability
+    savedCfg.gyroSteeringStickBlend   = uiData.gyroSteeringStickBlend
+    savedCfg.gyroSteeringInvert       = uiData.gyroSteeringInvert
+    savedCfg.gyroSteeringProfileVersion = 108
     savedCfg.photoMode                = uiData.photoMode
 
     if math.abs(lastGameGamma - uiData._gameGamma) > 1e-6 then
@@ -860,6 +1088,16 @@ local function updateDisplayValues(vData, assistFadeIn, assistEnabled, dt)
     uiData._finalSteer = vData.inputData.steer
 end
 
+local function updateGyroDisplayValues(available, raw, output)
+    uiData._gyroSteeringAvailable = available
+    uiData._gyroSteeringRaw = raw or 0
+    uiData._gyroSteeringOutput = output or 0
+    if available then
+        uiData._rawSteer = raw or 0
+        uiData._finalSteer = output or 0
+    end
+end
+
 ac.onSharedEvent("DSGA_calibrateSteering", function()
     if not uiData.assistEnabled then
         ac.setMessage("DualSense Gamepad Assist", "You have to enable the assist to re-calibrating the steering!")
@@ -876,7 +1114,24 @@ local brakeTarget    = 1.0
 local throttleTarget = 1.0
 local prevBrakeNd    = 0.0
 local prevThrottleNd = 0.0
--- local mouseAcc       = 0
+
+local function syncControllerPedalsForExtras(vData)
+    extras.rawThrottle = lib.clamp01(vData.inputData.gas)
+    extras.controllerThrottle = vData.inputData.gas
+    extras.controllerBrake = vData.inputData.brake
+end
+
+local function processGyroSteeringInput(vData, dt)
+    local speedKmh = vData.vehicle.speedKmh or car.speedKmh or (vData.localHVelLen * 3.6)
+    local gyroSteer, available, raw = gyroInput.update(vData.inputData, uiData, speedKmh, dt)
+    if not available then
+        gyroSteer = sanitizeSteeringInput(vData.inputData.steerStickX)
+        raw = gyroSteer
+    end
+    gyroSteer = sanitizeSteeringInput(gyroSteer)
+    updateGyroDisplayValues(available, raw, gyroSteer)
+    return gyroSteer, available
+end
 
 -- Reads controller and keyboard input (if enabled), and performs the initial smoothing and processing
 local function processInitialInput(vData, kbMode, steeringRateMult, extrasObj, dt)
@@ -970,7 +1225,7 @@ function script.update(dt)
 
     uiData._appCanRun = true
 
-    local vData = getVehicleData(dt, not uiData.assistEnabled) -- Vehicle data such as velocities, slip angles etc.
+    local vData = getVehicleData(dt, not uiData.assistEnabled or uiData.gyroSteeringEnabled) -- Vehicle data such as velocities, slip angles etc.
 
     if not vData then return end
 
@@ -989,7 +1244,20 @@ function script.update(dt)
     local desiredSteering = 0 -- The desired steering angle normalized to the car's steering lock
     local assistFadeIn    = 0 -- Controls how the steering processing is faded in and out at low speeds
 
-    if uiData.assistEnabled then
+    if uiData.gyroSteeringEnabled then
+        local gyroSteer = processGyroSteeringInput(vData, dt)
+
+        desiredSteering       = gyroSteer
+        vData.inputData.steer = gyroSteer
+
+        syncControllerPedalsForExtras(vData)
+        extras.update(vData, uiData, math.abs(gyroSteer), dt)
+
+        if vData.inputData.rumbleEffects == 0.0 then
+            vData.inputData.vibrationLeft  = 0.0
+            vData.inputData.vibrationRight = 0.0
+        end
+    elseif uiData.assistEnabled then
         local steeringRateMult                    = calcSteeringRateMult(vData.localHVelLen, vData.steeringLockDeg)
         local initialSteering, absInitialSteering = processInitialInput(vData, uiData.keyboardMode, steeringRateMult, extras, dt)
 
@@ -1003,11 +1271,18 @@ function script.update(dt)
 
         extras.update(vData, uiData, absInitialSteering, dt) -- Updating extra functionality like auto clutch etc.
 
+        -- vData.inputData.vibrationLeft  = sanitize01Input(vData.inputData.vibrationLeft  - 0.01)
+        -- vData.inputData.vibrationRight = sanitize01Input(vData.inputData.vibrationRight - 0.01)
+
+        if vData.inputData.rumbleEffects == 0.0 then
+            vData.inputData.vibrationLeft  = 0.0
+            vData.inputData.vibrationRight = 0.0
+        end
     end
 
     dualSenseFeedback.update(vData, uiData, dt)
 
-    updateDisplayValues(vData, assistFadeIn, uiData.assistEnabled, dt) -- Updating graphs
+    updateDisplayValues(vData, assistFadeIn, uiData.assistEnabled and not uiData.gyroSteeringEnabled, dt) -- Updating graphs
 
     -- Logging data
 

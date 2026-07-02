@@ -1,4 +1,6 @@
--- Native DualSense haptics and adaptive triggers for Assetto Corsa.
+-- Telemetry-driven DualSense feedback for Assetto Corsa without gyro steering.
+-- Four tyres are analyzed separately. Directional curb metadata and suspension
+-- load changes stay isolated so left/right feedback can be tested clearly.
 
 local M = {}
 
@@ -8,6 +10,8 @@ local shiftTimer = 0
 local shiftDirection = 0
 local previousGear = nil
 local triggersWereActive = false
+local testEffect = nil
+local testTimer = 0
 local nativeHapticTestEffect = nil
 local nativeHapticTestTimer = 0
 local nativeHapticGamepadIndex = nil
@@ -17,25 +21,6 @@ local bodyYVelocitySmooth = 0
 local bodyVelocityInitialized = false
 local previousLoadK = {[0] = 0, 0, 0, 0}
 local loadsInitialized = false
-
--- Keep this compatibility layer deliberately fixed to the validated 0.5.1
--- defaults. The UI only exposes an on/off switch and the shared grip multiplier.
-local legacyBody = {
-    bodyStrength = 0.85,
-    engineStrength = 0.045,
-    roadStrength = 0.62,
-    slideStrength = 0.58,
-    gripLossStrength = 0.92,
-    frontSlipStrength = 0.92,
-    rearSlipStrength = 1.0,
-    curbStrength = 1.0,
-    directionalCrossfeed = 0.08,
-    dirtStrength = 0.68,
-    collisionStrength = 1.0,
-    absStrength = 0.75,
-    shiftStrength = 0.62,
-    downshiftStrength = 0.58,
-}
 
 local nativeHapticDefaults = {
     Bodywork        = {0.5, 1.0, 0.0, 0.0},
@@ -85,6 +70,87 @@ local function addDetail(base, detail)
     return clamp01(detail + base * (1 - detail))
 end
 
+local function softStack(primary, stacking, ...)
+    local output = clamp01(primary)
+    local stack = clamp01(stacking)
+    for i = 1, select("#", ...) do
+        local detail = clamp01(select(i, ...)) * stack
+        output = 1 - (1 - output) * (1 - detail)
+    end
+    return clamp01(output)
+end
+
+local function applyMinimumOutput(value, minimum)
+    value = clamp01(value)
+    minimum = clamp01(minimum)
+    if value <= 0.004 or minimum <= 0 then return value end
+    return math.max(value, minimum * math.lerpInvSat(value, 0.004, 0.12))
+end
+
+local function shapePedalForce(pedal, resistance, curve, deadzone, floorForce, wallAt, wallForce, master)
+    pedal = clamp01(pedal)
+    deadzone = clamp01(deadzone)
+    if pedal <= deadzone then return 0 end
+
+    local travel = math.lerpInvSat(pedal, deadzone, 1)
+    local force = math.pow(travel, math.max(0.35, numberOrZero(curve))) * clamp01(resistance)
+    local floor = clamp01(floorForce) * math.lerpInvSat(travel, 0.02, 0.18)
+    force = math.max(force, floor)
+
+    wallAt = math.clamp(numberOrZero(wallAt), deadzone, 0.995)
+    if pedal >= wallAt then
+        local wallBlend = math.lerpInvSat(pedal, wallAt, 1)
+        force = math.max(force, math.lerp(force, clamp01(wallForce), wallBlend))
+    end
+
+    return clamp01(force * math.max(0, numberOrZero(master)))
+end
+
+local function applyPulseContrast(baseForce, intensity, frequency, uiData, phaseOffset)
+    intensity = clamp01(intensity)
+    if intensity <= 0 then return clamp01(baseForce) end
+
+    if pulse(frequency, 0.50, phaseOffset or 0) > 0 then
+        return clamp01(math.max(baseForce, uiData.dualSensePulsePeakForce * intensity))
+    end
+    return clamp01(baseForce * (1 - uiData.dualSensePulseReleaseDepth * intensity))
+end
+
+local function applyCrispPulse(baseForce, intensity, frequency, peakForce, releaseDepth, duty, releaseFloor, phaseOffset)
+    intensity = clamp01(intensity)
+    baseForce = clamp01(baseForce)
+    if intensity <= 0 then return baseForce end
+
+    frequency = math.max(1, numberOrZero(frequency))
+    duty = math.clamp(numberOrZero(duty), 0.08, 0.65)
+    releaseDepth = clamp01(releaseDepth)
+    local phase = (clock * frequency + (phaseOffset or 0)) % 1
+    local released = math.max(clamp01(releaseFloor), baseForce * (1 - releaseDepth * intensity))
+    local peak = math.max(released, clamp01(peakForce) * math.lerp(0.72, 1.0, intensity))
+
+    if phase < duty then
+        local decayStart = duty * 0.72
+        if phase < decayStart then
+            return peak
+        end
+        return clamp01(math.lerp(peak, released, math.lerpInvSat(phase, decayStart, duty)))
+    end
+
+    return clamp01(released)
+end
+
+local function applyShiftKick(baseForce, kick, progress)
+    kick = clamp01(kick)
+    if progress < 0.16 then
+        return math.max(baseForce, kick)
+    elseif progress < 0.44 then
+        return baseForce * (1 - kick * 0.985)
+    elseif progress < 0.68 then
+        return math.max(baseForce, kick * 0.54)
+    end
+    return baseForce * (1 - kick * 0.46)
+end
+
 local function clearTriggers()
     if type(ac.setDualSenseTriggerNoEffect) ~= "function" then return end
 
@@ -109,10 +175,6 @@ end
 
 local function nativeHapticAPIAvailable()
     return type(ac.setDualSenseHapticParams) == "function"
-end
-
-local function globalHapticStrength(uiData)
-    return math.max(0, numberOrZero(uiData.dualSenseGlobalStrength))
 end
 
 local function nativeHapticValue(gain, pitch, normalizationTarget, normalizationLag)
@@ -156,7 +218,6 @@ local function getNativeCurbSignals(state)
 end
 
 local function getConfiguredNativeHapticProfile(state, uiData)
-    local globalStrength = globalHapticStrength(uiData)
     local curbLeft, curbRight = getNativeCurbSignals(state)
     local curb = math.max(curbLeft, curbRight)
     local sideBalance = curbRight - curbLeft
@@ -171,25 +232,29 @@ local function getConfiguredNativeHapticProfile(state, uiData)
         uiData.dualSenseNativeSkidThreshold,
         uiData.dualSenseNativeSkidThreshold + 0.65
     )
-    local bodyworkGain = globalStrength * uiData.dualSenseNativeBodyworkStrength
+    local nativeMaster = math.max(0, numberOrZero(uiData.dualSenseNativeMasterStrength))
+    local bodyworkGain = uiData.dualSenseNativeBodyworkStrength
         * (1 + curb * uiData.dualSenseNativeCurbBoost)
+        * nativeMaster
     local bodyworkPitch = math.clamp(
         1 + sideBalance * uiData.dualSenseNativeSidePitchSeparation,
         0.55,
         1.45
     )
-    local engineGain = globalStrength * uiData.dualSenseNativeEngineStrength
+    local engineGain = uiData.dualSenseNativeEngineStrength
         * (1 - curb * uiData.dualSenseNativeCurbEngineDucking)
         * (1 - skidIntensity * uiData.dualSenseNativeSkidEngineDucking)
+        * nativeMaster
     engineGain = math.max(0, engineGain)
-    local skidGain = globalStrength * uiData.dualSenseNativeSkidStrength
+    local skidGain = uiData.dualSenseNativeSkidStrength
         * (1 + skidIntensity * uiData.dualSenseNativeSkidDynamicBoost)
+        * nativeMaster
     local skidPitch = math.clamp(
         1 + (frontSlip - rearSlip) * uiData.dualSenseNativeSkidAxlePitchSeparation,
         0.65,
         1.35
     )
-    local collision = nativeHapticValue(globalStrength * uiData.dualSenseNativeCollisionStrength, 1, 0, 0)
+    local collision = nativeHapticValue(uiData.dualSenseNativeCollisionStrength * nativeMaster, 1, 0, 0)
     uiData._dualSenseNativeCurbLeft = curbLeft
     uiData._dualSenseNativeCurbRight = curbRight
     uiData._dualSenseNativeBodyworkGain = bodyworkGain
@@ -200,16 +265,16 @@ local function getConfiguredNativeHapticProfile(state, uiData)
     return {
         Bodywork        = nativeHapticValue(bodyworkGain, bodyworkPitch, 0, 0),
         Engine          = nativeHapticValue(engineGain, 1, 0, 0.9),
-        Gear            = nativeHapticValue(globalStrength * uiData.dualSenseNativeGearStrength, 1, 0, 0),
-        GearGrind       = nativeHapticValue(globalStrength, 1, 0, 0),
-        Limiter         = nativeHapticValue(globalStrength * uiData.dualSenseNativeLimiterStrength, 1, 0, 0),
+        Gear            = nativeHapticValue(uiData.dualSenseNativeGearStrength * nativeMaster, 1, 0, 0),
+        GearGrind       = nativeHapticValue(1.0, 1, 0, 0),
+        Limiter         = nativeHapticValue(uiData.dualSenseNativeLimiterStrength * nativeMaster, 1, 0, 0),
         Skid            = nativeHapticValue(skidGain, skidPitch, 0, 0),
-        Wheel           = nativeHapticValue(globalStrength * uiData.dualSenseNativeWheelStrength, 1, 0, 0),
+        Wheel           = nativeHapticValue(uiData.dualSenseNativeWheelStrength * nativeMaster, 1, 0, 0),
         CollisionCar    = collision,
         CollisionObject = collision,
         CollisionTrack  = collision,
-        ScrapeCar       = nativeHapticValue(globalStrength * 3.0, 1, 0, 0),
-        ScrapeTrack     = nativeHapticValue(globalStrength * 3.0, 1, 0, 0),
+        ScrapeCar       = nativeHapticValue(3.0, 1, 0, 0),
+        ScrapeTrack     = nativeHapticValue(3.0, 1, 0, 0),
     }
 end
 
@@ -232,20 +297,19 @@ local function updateNativeHaptics(state, uiData, dt)
     if nativeHapticApplyTimer <= 0 then
         local profile = nativeHapticDefaults
         if uiData.dualSenseEnabled and uiData.dualSenseNativeHapticsEnabled then
-            local globalStrength = globalHapticStrength(uiData)
             profile = getConfiguredNativeHapticProfile(state, uiData)
             if nativeHapticTestTimer > 0 then
                 if nativeHapticTestEffect == "engine" then
-                    profile.Engine = nativeHapticValue(globalStrength * 2.0, 1, 0, 0.9)
+                    profile.Engine = nativeHapticValue(2.0, 1, 0, 0.9)
                 elseif nativeHapticTestEffect == "wheel" then
                     isolateNativeHapticProfile(profile)
-                    profile.Wheel = nativeHapticValue(globalStrength * 8.0, 1, 0, 0)
+                    profile.Wheel = nativeHapticValue(8.0, 1, 0, 0)
                 elseif nativeHapticTestEffect == "bodywork" then
                     isolateNativeHapticProfile(profile)
-                    profile.Bodywork = nativeHapticValue(globalStrength * 5.0, profile.Bodywork[2], 0, 0)
+                    profile.Bodywork = nativeHapticValue(5.0, profile.Bodywork[2], 0, 0)
                 elseif nativeHapticTestEffect == "skid" then
                     isolateNativeHapticProfile(profile)
-                    profile.Skid = nativeHapticValue(globalStrength * 8.0, 1, 0, 0)
+                    profile.Skid = nativeHapticValue(8.0, 1, 0, 0)
                 end
             end
         end
@@ -306,6 +370,9 @@ local function getSurfaceAndSuspension(vehicle, state, speedFade, dt)
     local curbShock = math.lerpInvSat(bodyYDelta, 0.10, 0.62) * speedFade
     local curbLeft = math.max(surfaceLeft, loadShockLeft * 0.92) * speedFade
     local curbRight = math.max(surfaceRight, loadShockRight * 0.92) * speedFade
+
+    -- A vertical body shock has no reliable side information. Use it to reinforce
+    -- the dominant side when one exists, or keep it centered as a final fallback.
     local bodyCurbFallback = curbShock * 0.68 * speedFade
     if math.max(curbLeft, curbRight) > 0.025 then
         if curbLeft > curbRight then
@@ -322,8 +389,8 @@ local function getSurfaceAndSuspension(vehicle, state, speedFade, dt)
     return curbLeft, curbRight, dirtLeft * speedFade, dirtRight * speedFade, roadShock
 end
 
-local function updateLegacyBodyVibration(vData, uiData, dt)
-    if not uiData.dualSenseLegacyBodyVibration then return end
+local function updateBodyVibration(vData, uiData, dt)
+    if not uiData.dualSenseBodyVibration and testTimer <= 0 then return end
 
     local state = vData.inputData
     local vehicle = vData.vehicle
@@ -331,12 +398,15 @@ local function updateLegacyBodyVibration(vData, uiData, dt)
     local speedFade = math.lerpInvSat(speedKmh, 3, 32)
     local rpmMax = math.max(numberOrZero(vehicle.rpmLimiter), 1000)
     local rpmRatio = clamp01(numberOrZero(vehicle.rpm) / rpmMax)
+
+    -- Engine stays quiet so tyre and surface information remains readable.
     local engine = pulse(math.lerp(18, 58, rpmRatio), 0.50)
         * math.lerp(0.20, 1.0, rpmRatio)
-        * legacyBody.engineStrength
+        * uiData.dualSenseEngineStrength
 
     local curbLeft, curbRight, dirtLeft, dirtRight, roadShock =
         getSurfaceAndSuspension(vehicle, state, speedFade, dt)
+
     local threshold = math.max(0.1, uiData.dualSenseSlipThreshold)
     local slipFL = getWheelSlip(vehicle.wheels[0], threshold)
     local slipFR = getWheelSlip(vehicle.wheels[1], threshold)
@@ -350,50 +420,104 @@ local function updateLegacyBodyVibration(vData, uiData, dt)
     local dirtWave = 0.28 + pulse(25, 0.66, 0.30) * 0.72
     local frontSlipWave = 0.30 + pulse(86, 0.48) * 0.70
     local rearSlipWave = 0.38 + pulse(57, 0.54, 0.20) * 0.62
-    local curbMotorLeft = math.max(curbLeft, curbRight * legacyBody.directionalCrossfeed)
-        * curbWave * legacyBody.curbStrength
-    local curbMotorRight = math.max(curbRight, curbLeft * legacyBody.directionalCrossfeed)
-        * curbWave * legacyBody.curbStrength
-    local roadMotorLeft = roadShock * roadWave * legacyBody.roadStrength * 0.78
-    local roadMotorRight = roadShock * roadWave * legacyBody.roadStrength
-    local dirtCrossfeed = math.max(0.12, legacyBody.directionalCrossfeed)
-    local dirtMotorLeft = math.max(dirtLeft, dirtRight * dirtCrossfeed) * dirtWave * legacyBody.dirtStrength
-    local dirtMotorRight = math.max(dirtRight, dirtLeft * dirtCrossfeed) * dirtWave * legacyBody.dirtStrength
-    local frontScale = legacyBody.gripLossStrength * legacyBody.frontSlipStrength
-    local rearScale = legacyBody.gripLossStrength * legacyBody.rearSlipStrength
+    local directionalCrossfeed = clamp01(uiData.dualSenseDirectionalCrossfeed)
+
+    local curbMotorLeft = math.max(curbLeft, curbRight * directionalCrossfeed) * curbWave * uiData.dualSenseCurbStrength
+    local curbMotorRight = math.max(curbRight, curbLeft * directionalCrossfeed) * curbWave * uiData.dualSenseCurbStrength
+    local roadMotorLeft = roadShock * roadWave * uiData.dualSenseRoadStrength * 0.78
+    local roadMotorRight = roadShock * roadWave * uiData.dualSenseRoadStrength
+    local dirtCrossfeed = math.max(0.12, directionalCrossfeed)
+    local dirtMotorLeft = math.max(dirtLeft, dirtRight * dirtCrossfeed) * dirtWave * uiData.dualSenseDirtStrength
+    local dirtMotorRight = math.max(dirtRight, dirtLeft * dirtCrossfeed) * dirtWave * uiData.dualSenseDirtStrength
+
+    -- The controller has two output amplitudes, not four physical tyre actuators.
+    -- Frequency and motor balance distinguish front/rear and left/right tyre events.
+    local frontScale = uiData.dualSenseGripLossStrength * uiData.dualSenseFrontSlipStrength
+    local rearScale = uiData.dualSenseGripLossStrength * uiData.dualSenseRearSlipStrength
     local frontMotorLeft = math.max(frontSlip * 0.48, slipFL * 0.68, slipFR * 0.54) * frontSlipWave * frontScale
     local frontMotorRight = math.max(frontSlip * 0.82, slipFL * 0.90, slipFR) * frontSlipWave * frontScale
     local rearMotorLeft = math.max(rearSlip * 0.86, slipRL, slipRR * 0.88) * rearSlipWave * rearScale
     local rearMotorRight = math.max(rearSlip * 0.58, slipRL * 0.64, slipRR * 0.76) * rearSlipWave * rearScale
-    local scrub = math.max(frontSlip, rearSlip) * legacyBody.slideStrength
-    local detailLeft = math.max(curbMotorLeft, roadMotorLeft, dirtMotorLeft, frontMotorLeft, rearMotorLeft, scrub * frontSlipWave * 0.34)
-    local detailRight = math.max(curbMotorRight, roadMotorRight, dirtMotorRight, frontMotorRight, rearMotorRight, scrub * frontSlipWave * 0.52)
+    local scrub = math.max(frontSlip, rearSlip) * uiData.dualSenseSlideStrength
+    local scrubMotorLeft = scrub * frontSlipWave * 0.34
+    local scrubMotorRight = scrub * frontSlipWave * 0.52
+
+    local detailStacking = uiData.dualSenseBodyDetailStacking
+    local detailLeft = softStack(
+        math.max(curbMotorLeft, frontMotorLeft, rearMotorLeft),
+        detailStacking,
+        roadMotorLeft,
+        dirtMotorLeft,
+        frontMotorLeft,
+        rearMotorLeft,
+        scrubMotorLeft,
+        curbMotorLeft
+    )
+    local detailRight = softStack(
+        math.max(curbMotorRight, frontMotorRight, rearMotorRight),
+        detailStacking,
+        roadMotorRight,
+        dirtMotorRight,
+        frontMotorRight,
+        rearMotorRight,
+        scrubMotorRight,
+        curbMotorRight
+    )
+
+    if testTimer > 0 then
+        if testEffect == "curb" then
+            detailLeft = math.max(detailLeft, curbWave * 0.92)
+            detailRight = math.max(detailRight, curbWave * 0.78)
+        elseif testEffect == "frontSlip" then
+            detailLeft = math.max(detailLeft, frontSlipWave * 0.52)
+            detailRight = math.max(detailRight, frontSlipWave * 0.94)
+        elseif testEffect == "rearSlip" then
+            detailLeft = math.max(detailLeft, rearSlipWave * 0.96)
+            detailRight = math.max(detailRight, rearSlipWave * 0.60)
+        end
+        testTimer = math.max(0, testTimer - dt)
+    end
 
     if vehicle.absInAction and pulse(uiData.dualSenseABSFrequency, 0.52) > 0 then
-        local absPulse = clamp01(vehicle.brake) * legacyBody.absStrength
+        local absPulse = clamp01(vehicle.brake) * uiData.dualSenseABSStrength
         detailLeft = math.max(detailLeft, absPulse * 0.70)
         detailRight = math.max(detailRight, absPulse)
     end
+
     if shiftTimer > 0 then
         local duration = math.max(0.001, uiData.dualSenseShiftDuration)
         local progress = clamp01(1 - shiftTimer / duration)
         local envelope = progress < 0.24 and 1 or (1 - math.lerpInvSat(progress, 0.24, 1))
-        local strength = shiftDirection < 0 and legacyBody.downshiftStrength or legacyBody.shiftStrength
+        local strength = shiftDirection < 0 and uiData.dualSenseDownshiftStrength or uiData.dualSenseShiftStrength
         local shiftPulse = envelope * strength
         detailLeft = math.max(detailLeft, shiftPulse)
         detailRight = math.max(detailRight, shiftPulse * (shiftDirection < 0 and 0.74 or 0.88))
     end
-    if vehicle.collisionDepth > 0 and speedKmh > 8 then collisionTimer = 0.16 end
+
+    if vehicle.collisionDepth > 0 and speedKmh > 8 then
+        collisionTimer = 0.16
+    end
     if collisionTimer > 0 then
-        local impact = clamp01(collisionTimer / 0.16) * legacyBody.collisionStrength
+        local impact = clamp01(collisionTimer / 0.16) * uiData.dualSenseCollisionStrength
         detailLeft = math.max(detailLeft, impact)
         detailRight = math.max(detailRight, impact)
         collisionTimer = math.max(0, collisionTimer - dt)
     end
 
-    local strength = legacyBody.bodyStrength * globalHapticStrength(uiData)
-    state.vibrationLeft = clamp01(addDetail(engine, detailLeft) * strength)
-    state.vibrationRight = clamp01(addDetail(engine, detailRight) * strength)
+    local bodyStrength = testTimer > 0 and 1 or uiData.dualSenseBodyStrength
+    local outputBoost = testTimer > 0 and 1 or uiData.dualSenseBodyOutputBoost
+    state.vibrationLeft = clamp01(applyMinimumOutput(
+        addDetail(engine, detailLeft) * bodyStrength * outputBoost,
+        uiData.dualSenseBodyMinimumOutput
+    ))
+    state.vibrationRight = clamp01(applyMinimumOutput(
+        addDetail(engine, detailRight) * bodyStrength * outputBoost,
+        uiData.dualSenseBodyMinimumOutput
+    ))
+    uiData._dualSenseCurbLeft = curbLeft
+    uiData._dualSenseCurbRight = curbRight
+    uiData._dualSenseOutputLeft = state.vibrationLeft
+    uiData._dualSenseOutputRight = state.vibrationRight
 end
 
 local function getDrivenWheelspin(vehicle, threshold)
@@ -414,18 +538,45 @@ local function updateTriggers(vData, uiData)
     local vehicle = vData.vehicle
     local gas = clamp01(vData.inputData.gas)
     local brake = clamp01(vData.inputData.brake)
-    local brakeForce = math.pow(brake, uiData.dualSenseBrakeCurve) * uiData.dualSenseBrakeResistance
+    local brakeForce = shapePedalForce(
+        brake,
+        uiData.dualSenseBrakeResistance,
+        uiData.dualSenseBrakeCurve,
+        uiData.dualSenseBrakeDeadzone,
+        uiData.dualSenseBrakeForceFloor,
+        uiData.dualSenseBrakeWallAt,
+        uiData.dualSenseBrakeWallForce,
+        uiData.dualSenseTriggerMasterStrength
+    )
     local frontSlip = math.max(
         getWheelSlip(vehicle.wheels[0], uiData.dualSenseSlipThreshold),
         getWheelSlip(vehicle.wheels[1], uiData.dualSenseSlipThreshold)
     )
 
     if vehicle.absInAction or (brake > 0.28 and frontSlip > 0.18) then
-        local absRelease = pulse(uiData.dualSenseABSFrequency, 0.48) * uiData.dualSenseABSFeedback
-        brakeForce = brakeForce * (1 - absRelease)
+        local absIntensity = math.max(vehicle.absInAction and 1 or 0, frontSlip) * uiData.dualSenseABSFeedback
+        brakeForce = applyCrispPulse(
+            brakeForce,
+            absIntensity,
+            uiData.dualSenseABSFrequency,
+            uiData.dualSensePulsePeakForce * 0.92,
+            uiData.dualSensePulseReleaseDepth,
+            0.38,
+            0.02,
+            0
+        )
     end
 
-    local throttleBase = math.pow(gas, uiData.dualSenseThrottleCurve) * uiData.dualSenseThrottleResistance
+    local throttleBase = shapePedalForce(
+        gas,
+        uiData.dualSenseThrottleResistance,
+        uiData.dualSenseThrottleCurve,
+        uiData.dualSenseThrottleDeadzone,
+        uiData.dualSenseThrottleForceFloor,
+        uiData.dualSenseThrottleWallAt,
+        uiData.dualSenseThrottleWallForce,
+        uiData.dualSenseTriggerMasterStrength
+    )
     local throttleForce = throttleBase
     local wheelspinIntensity = getDrivenWheelspin(vehicle, uiData.dualSenseWheelspinThreshold)
     local wheelspin = gas > 0.18 and vData.localHVelLen > 1 and wheelspinIntensity > 0
@@ -435,34 +586,34 @@ local function updateTriggers(vData, uiData)
         local duration = math.max(0.001, uiData.dualSenseShiftDuration)
         local progress = clamp01(1 - shiftTimer / duration)
         local kick = shiftDirection < 0 and uiData.dualSenseDownshiftThrottleKick or uiData.dualSenseShiftResistance
-        if progress < 0.18 then
-            throttleForce = math.max(throttleBase, kick)
-        elseif progress < 0.46 then
-            throttleForce = throttleBase * (1 - kick * 0.96)
-        elseif progress < 0.78 then
-            throttleForce = math.max(throttleBase, kick * 0.62)
-        else
-            throttleForce = throttleBase * (1 - kick * 0.30)
-        end
+        throttleForce = applyShiftKick(throttleBase, kick, progress)
     elseif wheelspin then
-        local release = pulse(uiData.dualSenseWheelspinFrequency, 0.50)
-            * uiData.dualSenseWheelspinFeedback
-            * wheelspinIntensity
-        if release > 0 then
-            throttleForce = throttleBase * (1 - release)
-        else
-            throttleForce = math.max(throttleBase, 0.12 * uiData.dualSenseWheelspinFeedback * wheelspinIntensity)
-        end
+        throttleForce = applyCrispPulse(
+            throttleBase,
+            uiData.dualSenseWheelspinFeedback * wheelspinIntensity,
+            uiData.dualSenseWheelspinFrequency,
+            uiData.dualSensePulsePeakForce * 0.82,
+            uiData.dualSensePulseReleaseDepth * 0.78,
+            0.42,
+            0.015,
+            0.18
+        )
     else
         local limiterIntensity = vehicle.rpmLimiter > 0
             and math.lerpInvSat(vehicle.rpm, vehicle.rpmLimiter - 180, vehicle.rpmLimiter - 35)
             or 0
         if limiterIntensity > 0 then
-            if pulse(uiData.dualSenseLimiterFrequency, 0.50) > 0 then
-                throttleForce = math.max(throttleBase, limiterIntensity * uiData.dualSenseLimiterResistance)
-            else
-                throttleForce = throttleBase * (1 - limiterIntensity * 0.72)
-            end
+            local redlineBase = math.min(throttleBase, uiData.dualSenseThrottleResistance * 0.70)
+            throttleForce = applyCrispPulse(
+                redlineBase,
+                limiterIntensity * uiData.dualSenseLimiterResistance,
+                uiData.dualSenseLimiterFrequency,
+                math.max(uiData.dualSensePulsePeakForce, 0.78),
+                0.985,
+                0.30,
+                0.035,
+                0.32
+            )
         end
     end
 
@@ -475,6 +626,8 @@ function M.update(vData, uiData, dt)
     local state = vData.inputData
     clock = clock + dt
     uiData._dualSenseDetected = dualSenseConnected(state)
+    uiData._dualSenseTestActive = testTimer > 0 or nativeHapticTestTimer > 0
+    uiData._dualSenseRumbleEffects = numberOrZero(state.rumbleEffects)
     uiData._dualSenseNativeHapticsAvailable = nativeHapticAPIAvailable()
     uiData._dualSenseNativeTestSeconds = nativeHapticTestTimer
     uiData._dualSenseNativeTestMode = nativeHapticTestEffect == "engine" and 1
@@ -500,7 +653,10 @@ function M.update(vData, uiData, dt)
         return
     end
 
-    updateLegacyBodyVibration(vData, uiData, dt)
+    -- Writing vibrationLeft/vibrationRight only needs the joypad state. Some
+    -- controller wrappers can make ac.getDualSense() return nil while rumble is
+    -- still available, so detection is diagnostic information rather than a gate.
+    updateBodyVibration(vData, uiData, dt)
     updateTriggers(vData, uiData)
     shiftTimer = math.max(0, shiftTimer - dt)
 end
@@ -510,6 +666,11 @@ function M.release()
     if nativeHapticGamepadIndex ~= nil then
         applyNativeHapticProfile(nativeHapticGamepadIndex, nativeHapticDefaults)
     end
+end
+
+function M.test(effect)
+    testEffect = effect
+    testTimer = 1.2
 end
 
 function M.testNative(effect)

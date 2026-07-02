@@ -1,4 +1,4 @@
-local lib = require "DGALib"
+local lib = require "AssistCore"
 
 local M = {}
 
@@ -54,10 +54,6 @@ local canUseClutch           = true
 local clutchSampled          = false
 
 local gearData = {} -- Shifting table for the automatic mode
-
-local function sanitize01Input(value)
-    return lib.numberGuard(math.clamp(value, 0, 1))
-end
 
 local function getReferenceWheelIndicies(vData)
     return (vData.vehicle.tractionType == 1) and { 0, 1 } or { 2, 3 }

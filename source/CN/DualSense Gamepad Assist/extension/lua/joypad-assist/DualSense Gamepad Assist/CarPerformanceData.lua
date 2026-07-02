@@ -1,4 +1,4 @@
-local lib = require "DGALib"
+local lib = require "AssistCore"
 
 local M = {}
 

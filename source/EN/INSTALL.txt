@@ -1,0 +1,14 @@
+DualSense Gamepad Assist v1.0.0 stable release
+Author: Adudumax
+
+1. Connect the DualSense controller over USB.
+2. Open the `DualSense Gamepad Assist` folder from this archive.
+3. Copy the `apps` and `extension` folders into the Assetto Corsa root folder.
+4. Open Content Manager: Settings -> Custom Shaders Patch -> Gamepad FX.
+5. Enable Gamepad FX and select `DualSense Gamepad Assist`.
+6. Set AC input method to Gamepad.
+7. Enter a session and open `DualSense Gamepad Assist` from the right-side app bar.
+
+The first launch uses the Balanced preset by default.
+Other Gamepad FX scripts can remain installed, but CSP can only enable one implementation at a time.
+Steam Input is recommended to be disabled. Python and PATH changes are not required.
