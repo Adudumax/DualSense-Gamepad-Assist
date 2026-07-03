@@ -2,32 +2,27 @@
 
 Author: Adudumax
 
-This package is based on the v1.0.0 stable build. It keeps the validated DualSense haptics and adaptive-trigger feedback while adding Gyrosteer-style precision gyro steering and a cleaner control panel.
+DualSense Gamepad Assist is an Assetto Corsa / CSP Gamepad FX script for PlayStation 5 DualSense controllers. It combines controller steering assist, Gyrosteer-style precision gyro steering, automatic clutch support, CSP native haptics, compatibility vibration, and adaptive trigger feedback in one in-game control panel.
 
-## What's New
+## Highlights
 
-- Adds Gyrosteer-style DualSense gyro steering with the original sensitivity curve and direct steering response.
-- Refines grip vibration, CSP native haptics, adaptive-trigger resistance, ABS pulses, wheelspin pulses, redline pulses, and shift rebound.
-- Adds clearer feel presets, a custom preset slot, and a separate advanced settings window.
-- Pauses traditional steering assist while gyro steering is active, while keeping vibration, triggers, and auto clutch available.
-- Removes internal module wording from the UI and polishes the header layout.
+- DualSense haptics for grip, curbs, road texture, tire slip, collision impact, and shift impact.
+- Adaptive triggers for brake resistance, throttle resistance, ABS pulses, wheelspin pulses, redline pulses, and shift rebound.
+- Precision gyro steering with a Gyrosteer-style response.
+- Controller steering assist for regular stick driving.
+- Balanced, comfort, strong, and custom feel presets.
 
 ## Recommended Use
 
 1. Connect the DualSense controller over USB.
 2. In Content Manager, open `Settings -> Custom Shaders Patch -> Gamepad FX` and select `DualSense Gamepad Assist`.
 3. Enter a session and open `DualSense Gamepad Assist` from the in-game sidebar.
-4. Enable `Precision gyro steering` if you want gyro control.
-5. Drive directly; players familiar with Gyrosteer can fine-tune sensitivity in advanced settings.
+4. Use the balanced preset first. Open advanced settings only if you want to fine-tune the behavior.
 
-## Mechanism Notes
+## Notes
 
-The gyro steering core keeps the Gyrosteer-style response: sensor fusion feeds `math.tan(gamepadAngle * 4) / 4`, applies edge smoothing through `baseSteer`, adds a light `ffb * -0.06` correction, and maps to AC steering input with `500 / car.steerLock`.
+Gyro steering depends on CSP exposing DualSense sensor data. If the current CSP environment does not provide DualSense gyro data, the UI will show it as unavailable and the script falls back to regular stick input without affecting vibration or adaptive-trigger feedback.
 
-## Limitations
+## Credits
 
-Gyro steering depends on CSP exposing DualSense sensor data. If the current CSP environment does not provide DualSense gyro data, the UI will show it as unavailable and the script falls back to stick input without affecting vibration or adaptive-trigger feedback.
-
-## Third-Party Notices
-
-This project is released under a distinct name. See `THIRD_PARTY_NOTICES.md` and the `licenses` folder for third-party references and license texts.
+Special thanks to the author of AC Advanced Gamepad Assist, Dmitrii Alekseev for Gyrosteer, and x4fab plus the Custom Shaders Patch contributors for CSP, Gamepad FX, and the controller feedback APIs.

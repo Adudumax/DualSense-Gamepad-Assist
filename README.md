@@ -1,37 +1,50 @@
+![DualSense Gamepad Assist](assets/banner.png)
+
 # DualSense Gamepad Assist
 
-[????](README_CN.md)
+[简体中文](README_CN.md)
 
-DualSense Gamepad Assist is an Assetto Corsa CSP `Gamepad FX` script for DualSense controllers. It combines controller steering assist, Gyrosteer-style precision gyro steering, automatic clutch, optional automatic shifting, CSP native haptics, compatibility vibration, and adaptive triggers in one in-game control panel.
+DualSense Gamepad Assist is a clean, in-game controller enhancement mod for Assetto Corsa / CSP. It is designed for PlayStation 5 DualSense controllers and brings together controller steering assist, Gyrosteer-style precision gyro steering, automatic clutch support, CSP native haptics, compatibility vibration, and adaptive trigger feedback.
 
-## What's New In v1.0.0
+The goal is simple: make a DualSense feel stronger, clearer, and more natural in Assetto Corsa without asking most players to tune a long list of parameters.
 
-- Adds Gyrosteer-style DualSense gyro steering with the original sensitivity curve and a direct steering feel.
-- Refines DualSense haptics and adaptive triggers for stronger, clearer grip, curb, skid, redline, ABS, wheelspin, and shift feedback.
-- Reworks the control panel around clear presets, a custom preset slot, and a separate advanced settings window.
-- Keeps gyro steering independent from traditional gamepad steering assist so the two modes do not fight each other.
-- Polishes the header and user-facing wording for a cleaner, more modern interface.
+## Highlights
+
+- **DualSense haptics** for grip, curbs, road texture, tire slip, collision impact, and shift impact.
+- **Adaptive triggers** for brake resistance, throttle resistance, ABS pulses, wheelspin pulses, redline pulses, and shift rebound.
+- **Precision gyro steering** with a Gyrosteer-style response for players who prefer direct motion steering.
+- **Controller steering assist** for regular stick driving, with simplified settings for everyday use.
+- **Feel presets** for balanced, comfort, strong, and custom setups.
+- **In-game control panel** through CSP Gamepad FX, no external companion app required.
 
 ## Downloads
 
-- [English package](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v1.0.0/DualSense-Gamepad-Assist-v1.0.0-Windows-x64-EN.zip)
-- [Chinese package](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases/download/v1.0.0/DualSense-Gamepad-Assist-v1.0.0-Windows-x64-CN.zip)
 - [GitHub Releases](https://github.com/Adudumax/DualSense-Gamepad-Assist/releases)
+
+Open the latest release and download the package that matches your language preference. Both English and Simplified Chinese packages are provided when available.
 
 ## Installation
 
-1. Install Content Manager and CSP `0.2.0` or newer.
-2. Download the preferred package and open its `DualSense Gamepad Assist` folder.
-3. Copy the `apps` and `extension` folders into the Assetto Corsa root folder, `assettocorsa`.
-4. In Content Manager, open `Settings -> Custom Shaders Patch -> Gamepad FX`.
-5. Enable Gamepad FX and select `DualSense Gamepad Assist`.
-6. Enter a session and open the app from the in-game sidebar.
+1. Install Content Manager and Custom Shaders Patch `0.2.0` or newer.
+2. Download the latest release package from GitHub Releases.
+3. Open the archive and enter the `DualSense Gamepad Assist` folder.
+4. Copy the `apps` and `extension` folders into your Assetto Corsa root folder, usually named `assettocorsa`.
+5. In Content Manager, open `Settings -> Custom Shaders Patch -> Gamepad FX`.
+6. Enable Gamepad FX and select `DualSense Gamepad Assist`.
+7. Enter a session and open the app from the in-game sidebar.
 
-A USB connection is recommended. If dedicated feedback is missing, disable Steam Input for Assetto Corsa and enter the session again.
+A USB connection is recommended for the most reliable DualSense feedback. If haptics or adaptive triggers are missing, disable Steam Input for Assetto Corsa and enter the session again.
 
-## Source
+## Basic Use
 
-- [English source snapshot](source/EN/)
-- [Chinese source snapshot](source/CN/)
+Most players can start with the default balanced preset. Use the main panel for everyday settings, and open advanced settings only when you want to fine-tune steering, haptics, triggers, diagnostics, or restore defaults.
 
-The steering-assist implementation references AC Advanced Gamepad Assist. Gyro steering references the user-provided Gyrosteer script. See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for attribution and license details.
+When precision gyro steering is enabled, regular steering assist is kept out of the way so the two steering modes do not fight each other. Haptics, adaptive triggers, and auto clutch can still remain active.
+
+## Credits
+
+Special thanks to:
+
+- The author of **AC Advanced Gamepad Assist**, for the controller steering-assist foundation and inspiration.
+- **Dmitrii Alekseev**, author of **Gyrosteer**, for the gyro steering concept and reference behavior.
+- **x4fab and the Custom Shaders Patch contributors**, for CSP, Gamepad FX, and the APIs that make in-game controller feedback possible.

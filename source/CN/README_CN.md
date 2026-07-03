@@ -1,33 +1,28 @@
-# DualSense Gamepad Assist 1.0.10 UI 文案测试包
+# DualSense Gamepad Assist v1.0.0
 
 作者：Adudumax
 
-本版基于 `1.0.9 Gyrosteer Exact`，只调整界面文案。陀螺仪转向核心、震动反馈和 DualSense 扳机反馈保持不变。
+DualSense Gamepad Assist 是一个面向 Assetto Corsa / CSP 的 Gamepad FX 脚本，主要为 PlayStation 5 DualSense 手柄设计。它把手柄转向辅助、Gyrosteer 风格陀螺仪精准转向、自动离合、CSP 原生触觉、兼容震动和自适应扳机反馈整合到一个游戏内控制面板中。
 
-## 本版重点
+## 功能亮点
 
-- 设置界面中不再显示内部模块名称，统一使用用户能理解的 `转向辅助`。
-- 优化陀螺仪提示语，说明启用后的模式切换和保留功能。
-- 高级参数说明改为面向用户的微调说明，不再使用开发讨论式措辞。
-- `gyro_input.lua` 保持 1.0.9 的 Gyrosteer Exact 核心不变。
-- `dualsense_feedback.lua` 保持 1.0.5 稳定版核心反馈不变。
+- DualSense 触觉反馈：覆盖抓地、路肩、路面纹理、轮胎滑移、碰撞冲击和换挡冲击。
+- 自适应扳机：支持刹车阻力、油门阻力、ABS 脉冲、打滑脉冲、红线脉冲和换挡回弹。
+- Gyrosteer 风格陀螺仪精准转向。
+- 面向普通摇杆驾驶的手柄转向辅助。
+- 平衡、舒适、强劲和自定义手感预设。
 
 ## 推荐用法
 
-1. 使用 USB 连接 DualSense。
-2. 进入 Content Manager：`设置 -> Custom Shaders Patch -> Gamepad FX`，选择 `DualSense Gamepad Assist`。
-3. 进游戏后打开右侧应用栏里的 `DualSense Gamepad Assist`。
-4. 打开 `陀螺仪精准转向`。
-5. 直接驾驶；熟悉 Gyrosteer 的玩家可以在高级参数中微调灵敏度。
+1. 使用 USB 连接 DualSense 手柄。
+2. 在 Content Manager 中打开 `设置 -> Custom Shaders Patch -> Gamepad FX`，并选择 `DualSense Gamepad Assist`。
+3. 进入赛道后，从游戏内右侧应用栏打开 `DualSense Gamepad Assist`。
+4. 先使用默认平衡预设。只有需要微调时，再打开高级设置。
 
-## 机制说明
+## 说明
 
-本版仍保持 Gyrosteer 风格的驾驶核心：传感器融合后使用 `math.tan(gamepadAngle * 4) / 4` 响应曲线，通过 `baseSteer` 边缘平滑、`ffb * -0.06` 轻微回馈修正，再按 `500 / car.steerLock` 映射到 AC 转向输入。
+陀螺仪转向依赖 CSP 对 DualSense 传感器数据的读取。如果当前 CSP 环境没有提供 DualSense 陀螺仪数据，界面会显示不可用，脚本会回到普通摇杆输入，不会影响震动或自适应扳机反馈。
 
-## 限制
+## 致谢
 
-陀螺仪体验依赖 CSP 对 DualSense 传感器的读取。如果当前 CSP 环境没有提供 DualSense 陀螺仪数据，界面会显示未检测到，脚本会回退到摇杆输入，不会影响震动和扳机反馈。
-
-## 第三方许可
-
-本项目以独立名称发布。所使用的第三方开源组件、参考资料和许可文本见 `THIRD_PARTY_NOTICES.md` 与 `licenses` 目录。
+特别感谢 AC Advanced Gamepad Assist 的作者、Gyrosteer 作者 Dmitrii Alekseev，以及 x4fab 和 Custom Shaders Patch 贡献者提供的 CSP、Gamepad FX 与手柄反馈接口。
